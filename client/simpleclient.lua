@@ -5,6 +5,7 @@ UID = UID or "alice"
 package.path = string.format("%s/lualib/?.lua;%s/client/?.lua;%s/skynet/lualib/?.lua", PATH, PATH, PATH)
 package.cpath = string.format("%s/skynet/luaclib/?.so;%s/lsocket/?.so", PATH, PATH)
 
+local input = require "clientsocket"
 local socket = require "simplesocket"
 local message = require "simplemessage"
 local rules = require("ddz_rules")
@@ -25,7 +26,7 @@ function event:__error(what, err, req, session)
 end
 
 function event:ping()
-	-- print("ping")
+	--print("ping")
 end
 
 function event:signin(req, resp)
@@ -93,12 +94,24 @@ function event:onleftroom(args)
 	print("~~~~onleftroom", args.index, args.userid)
 end
 
+local needrequestmaster = false
 local function requestmaster()
-	io.write("是否抢地主（0|1|2|3）：")
-	local cmd = io.read()
-	if cmd then
-		if cmd == "" then cmd = "0" end
- 		message.request("oncommand", {cmd="master",parameters=cmd})
+	print("是否抢地主（0|1|2|3）：")
+	while input.readstdin() do
+	end
+	needrequestmaster = true
+end
+
+local function asyncrequestmaster()
+	if needrequestmaster then
+		--print("asyncrequestmaster")
+		local cmd = input.readstdin()
+        	if cmd then
+	                if cmd == "" then cmd = "0" end
+                	message.request("oncommand", {cmd="master",parameters=cmd})
+			needrequestmaster = false
+			print("end asyncrequestmaster")
+	        end
 	end
 end
 
@@ -111,29 +124,39 @@ local function dumpcards(cards)
 	io.write("\n")
 end
 
+local needplaycards = false
 local termcards
 local function playcards()
-	io.write("我的当前牌面：")
+	print("我的当前牌面：")
 	dumpcards(mycards)
-	io.write("请出牌（半角逗号分隔）：")
-	local cmd = io.read()
-	pcall(function()
-		if cmd then
-			if cmd == "" then
-				message.request("oncommand", {cmd="play",parameters=string.char(0)})
-			else
-				local cards = cmd:split(",")
-				termcards = cards
-				message.request("oncommand", {cmd="play",parameters=string.char(table.unpack(cards))})
-			end
-			
-		end
-	end, function(err)
-		playcards()
-	end)
-	
+	print("请出牌（半角逗号分隔）：")
+	while input.readstdin() do
+	end
+	needplaycards = true
 end
 
+local function asyncplaycards()
+	if needplaycards then
+		--print("asyncplaycards")
+		local cmd = input.readstdin()
+	        pcall(function()
+        	        if cmd then
+	                        if cmd == "" then
+                        	        message.request("oncommand", {cmd="play",parameters=string.char(0)})
+                	        else
+        	                        local cards = cmd:split(",")
+	                                termcards = cards
+                                	message.request("oncommand", {cmd="play",parameters=string.char(table.unpack(cards))})
+                        	end
+				needplaycards = false
+				print("end needplaycards")
+        	        end
+	        end, function(err)
+        	        playcards()
+	        end)
+	end
+
+end
 function event:ongameready(args)
 	local cards = {string.byte(args.cards, 1, -1)}
 	
@@ -225,4 +248,6 @@ message.request("signin", { userid = UID })
 while true do
 	message.update()
 
+	asyncrequestmaster()
+	asyncplaycards()
 end
